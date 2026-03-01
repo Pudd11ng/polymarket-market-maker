@@ -59,9 +59,9 @@ public class MarketDataService {
     private volatile PolymarketWebSocketClient wsClient;
     private volatile boolean shutdownRequested = false;
 
-    public MarketDataService(WebSocketConfig wsConfig) {
+    public MarketDataService(WebSocketConfig wsConfig, OrderBook orderBook) {
         this.wsConfig = wsConfig;
-        this.orderBook = new OrderBook(DEFAULT_ASSET_ID);
+        this.orderBook = orderBook;
         this.objectMapper = new ObjectMapper();
         this.reconnectScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "ws-reconnect");

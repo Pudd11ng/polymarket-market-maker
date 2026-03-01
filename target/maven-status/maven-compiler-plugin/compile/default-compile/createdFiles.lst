@@ -1,4 +1,5 @@
 com\polymarket\marketmaker\config\WebSocketConfig.class
+com\polymarket\marketmaker\service\StrategyEngine.class
 com\polymarket\marketmaker\model\OrderBook$Side.class
 com\polymarket\marketmaker\service\MarketDataService.class
 com\polymarket\marketmaker\model\OrderBook.class

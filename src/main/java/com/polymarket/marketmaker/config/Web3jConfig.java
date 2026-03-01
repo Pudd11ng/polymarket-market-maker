@@ -7,11 +7,11 @@ import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.http.HttpService;
 
+import com.polymarket.marketmaker.model.OrderBook;
+
 /**
- * Configuration for Web3j — manages the connection to the Polygon
- * JSON-RPC node and loads wallet credentials from environment variables.
- *
- * TODO (Sprint 2): Wire actual RPC endpoint and credential injection.
+ * Central configuration — manages the Polygon JSON-RPC connection,
+ * wallet credentials, and the shared {@link OrderBook} singleton.
  */
 @Configuration
 public class Web3jConfig {
@@ -36,5 +36,14 @@ public class Web3jConfig {
     @Bean
     public Credentials credentials() {
         return Credentials.create(walletPrivateKey);
+    }
+
+    /**
+     * Shared in-memory order book — written by {@code MarketDataService},
+     * read by {@code StrategyEngine}.
+     */
+    @Bean
+    public OrderBook orderBook() {
+        return new OrderBook("default");
     }
 }

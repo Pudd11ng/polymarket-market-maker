@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="com.polymarket.marketmaker.model.OrderBookTest" time="0.208" tests="10" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.921" tests="9" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.cpu.isalist" value="amd64"/>
@@ -58,14 +58,40 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="65.0"/>
   </properties>
-  <testcase name="testConcurrentUpdates" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.086"/>
-  <testcase name="testClear" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.004"/>
-  <testcase name="testBidLevelUpdate" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.006"/>
-  <testcase name="testEmptyBook" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.004"/>
-  <testcase name="testRemoveLevelOnZeroSize" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.003"/>
-  <testcase name="testSpreadCalculation" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.006"/>
-  <testcase name="testUpdateAndGetBestAsk" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.004"/>
-  <testcase name="testUpdateAndGetBestBid" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.009"/>
-  <testcase name="testRemoveLevelOnNegativeSize" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.003"/>
-  <testcase name="testSpreadEmptyWhenOneSideMissing" classname="com.polymarket.marketmaker.model.OrderBookTest" time="0.009"/>
+  <testcase name="testHmacSignatureGeneration" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.827">
+    <system-out><![CDATA[21:30:56.983 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testHmacDeterministic" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.005">
+    <system-out><![CDATA[21:30:57.403 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testSignatureLength" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.03">
+    <system-out><![CDATA[21:30:57.409 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testSignatureVValue" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.009">
+    <system-out><![CDATA[21:30:57.440 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testComputeDigestLength" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.004">
+    <system-out><![CDATA[21:30:57.450 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testSignOrderProducesDeterministicSignature" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.01">
+    <system-out><![CDATA[21:30:57.456 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testComputeDigestDeterministic" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.008">
+    <system-out><![CDATA[21:30:57.468 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testDifferentOrdersDifferentSignatures" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.012">
+    <system-out><![CDATA[21:30:57.475 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
+  <testcase name="testDomainSeparatorIsConstant" classname="com.polymarket.marketmaker.util.CryptoSigningUtilTest" time="0.004">
+    <system-out><![CDATA[21:30:57.489 [main] INFO com.polymarket.marketmaker.util.CryptoSigningUtil -- EIP-712 domain separator computed: 0x90b09cfc29c2d81a5160a529b2f3060f48fe42109007951bbd61965a007c0f0c
+]]></system-out>
+  </testcase>
 </testsuite>

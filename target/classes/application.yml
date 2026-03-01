@@ -18,6 +18,10 @@ spring:
 polymarket:
   api:
     url: ${POLYMARKET_API_URL:https://clob.polymarket.com}
+    key: ${POLY_API_KEY:}
+    secret: ${POLY_API_SECRET:}
+    passphrase: ${POLY_API_PASSPHRASE:}
+    fee-rate-bps: ${POLY_FEE_RATE_BPS:0}
 
   ws:
     url: ${POLYMARKET_WS_URL:wss://ws-subscriptions-clob.polymarket.com/ws/market}
@@ -30,6 +34,11 @@ polymarket:
 
   polygon:
     rpc-url: ${POLYGON_RPC_URL:https://polygon-rpc.com}
+
+  strategy:
+    target-spread-cents: ${TARGET_SPREAD_CENTS:0.02}
+    order-size: ${ORDER_SIZE:100}
+    paper-trading-enabled: ${PAPER_TRADING:true}
 
 # -----------------------------------------------------------
 # Logging — keep it lean for low-latency
