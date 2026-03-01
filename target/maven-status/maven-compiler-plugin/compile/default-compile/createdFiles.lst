@@ -1,0 +1,17 @@
+com\polymarket\marketmaker\config\WebSocketConfig.class
+com\polymarket\marketmaker\model\OrderBook$Side.class
+com\polymarket\marketmaker\service\MarketDataService.class
+com\polymarket\marketmaker\model\OrderBook.class
+com\polymarket\marketmaker\util\CryptoSigningUtil.class
+com\polymarket\marketmaker\config\Web3jConfig.class
+com\polymarket\marketmaker\PolymarketMarketMakerApplication.class
+com\polymarket\marketmaker\service\OrderManagementService.class
+com\polymarket\marketmaker\model\ApiRequest.class
+com\polymarket\marketmaker\model\Order$OrderStatus.class
+com\polymarket\marketmaker\model\Order$Side.class
+com\polymarket\marketmaker\model\ApiRequest$ApiRequestBuilder.class
+com\polymarket\marketmaker\service\MarketDataService$PolymarketWebSocketClient.class
+com\polymarket\marketmaker\model\OrderBook$PriceLevel.class
+com\polymarket\marketmaker\model\OrderBook$PriceLevel$PriceLevelBuilder.class
+com\polymarket\marketmaker\model\Order$OrderBuilder.class
+com\polymarket\marketmaker\model\Order.class

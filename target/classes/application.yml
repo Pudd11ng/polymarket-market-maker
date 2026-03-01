@@ -1,0 +1,41 @@
+# ============================================================
+# Polymarket Market-Maker — Application Configuration
+# ============================================================
+# IMPORTANT: Never commit real secrets. Inject these values via
+#            environment variables or a secrets manager at runtime.
+# ============================================================
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: polymarket-market-maker
+
+# -----------------------------------------------------------
+# Polymarket-specific settings
+# -----------------------------------------------------------
+polymarket:
+  api:
+    url: ${POLYMARKET_API_URL:https://clob.polymarket.com}
+
+  ws:
+    url: ${POLYMARKET_WS_URL:wss://ws-subscriptions-clob.polymarket.com/ws/market}
+    initial-backoff-ms: ${WS_INITIAL_BACKOFF_MS:1000}
+    max-backoff-ms: ${WS_MAX_BACKOFF_MS:30000}
+    backoff-multiplier: ${WS_BACKOFF_MULTIPLIER:2.0}
+
+  wallet:
+    private-key: ${WALLET_PRIVATE_KEY:1111111111111111111111111111111111111111111111111111111111111111}
+
+  polygon:
+    rpc-url: ${POLYGON_RPC_URL:https://polygon-rpc.com}
+
+# -----------------------------------------------------------
+# Logging — keep it lean for low-latency
+# -----------------------------------------------------------
+logging:
+  level:
+    root: INFO
+    com.polymarket.marketmaker: DEBUG
+    org.web3j: WARN
