@@ -11,6 +11,7 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,12 +44,11 @@ import jakarta.annotation.PreDestroy;
  * </p>
  */
 @Service
-public class MarketDataService {
+public class MarketDataService implements MarketSwitchListener {
 
     private static final Logger log = LoggerFactory.getLogger(MarketDataService.class);
 
-    /** Dummy market / asset ID used until real market selection is wired. */
-    private static final String DEFAULT_ASSET_ID = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+    private volatile String marketId;
 
     private final WebSocketConfig wsConfig;
     private final OrderBook orderBook;
@@ -59,9 +59,11 @@ public class MarketDataService {
     private volatile PolymarketWebSocketClient wsClient;
     private volatile boolean shutdownRequested = false;
 
-    public MarketDataService(WebSocketConfig wsConfig, OrderBook orderBook) {
+    public MarketDataService(WebSocketConfig wsConfig, OrderBook orderBook,
+            @Value("${polymarket.market-id}") String marketId) {
         this.wsConfig = wsConfig;
         this.orderBook = orderBook;
+        this.marketId = marketId;
         this.objectMapper = new ObjectMapper();
         this.reconnectScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "ws-reconnect");
@@ -97,6 +99,20 @@ public class MarketDataService {
     }
 
     // -----------------------------------------------------------------
+    // MarketSwitchListener — safe transition
+    // -----------------------------------------------------------------
+
+    /**
+     * Called by {@link MarketDiscoveryService} when the active market changes.
+     * Clears the order book and switches the WebSocket subscription.
+     */
+    @Override
+    public void onMarketSwitch(String newTokenId) {
+        log.info("🔄 MarketDataService switching market → {}", newTokenId);
+        switchMarket(newTokenId);
+    }
+
+    // -----------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------
 
@@ -105,6 +121,29 @@ public class MarketDataService {
      */
     public OrderBook getOrderBook() {
         return orderBook;
+    }
+
+    /**
+     * Switches the WebSocket subscription to a new market token.
+     * <ol>
+     * <li>Clear stale order book data</li>
+     * <li>Update internal market ID</li>
+     * <li>Subscribe to new token on the WebSocket</li>
+     * </ol>
+     *
+     * @param newTokenId the new CLOB token ID
+     */
+    public void switchMarket(String newTokenId) {
+        log.info("🔄 Switching subscription: {} → {}", this.marketId, newTokenId);
+
+        // 1. Clear stale data
+        orderBook.clear();
+
+        // 2. Update internal state
+        this.marketId = newTokenId;
+
+        // 3. Subscribe to new market
+        subscribeToMarket(newTokenId);
     }
 
     /**
@@ -188,7 +227,7 @@ public class MarketDataService {
             reconnectAttempts.set(0); // reset backoff on success
 
             // Auto-subscribe to the default market
-            subscribeToMarket(DEFAULT_ASSET_ID);
+            subscribeToMarket(marketId);
         }
 
         @Override

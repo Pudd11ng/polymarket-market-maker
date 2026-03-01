@@ -9,6 +9,7 @@ com\polymarket\marketmaker\PolymarketMarketMakerApplication.class
 com\polymarket\marketmaker\service\OrderManagementService.class
 com\polymarket\marketmaker\model\ApiRequest.class
 com\polymarket\marketmaker\model\Order$OrderStatus.class
+com\polymarket\marketmaker\service\MarketDiscoveryService.class
 com\polymarket\marketmaker\model\Order$Side.class
 com\polymarket\marketmaker\model\ApiRequest$ApiRequestBuilder.class
 com\polymarket\marketmaker\service\MarketDataService$PolymarketWebSocketClient.class
@@ -16,3 +17,4 @@ com\polymarket\marketmaker\model\OrderBook$PriceLevel.class
 com\polymarket\marketmaker\model\OrderBook$PriceLevel$PriceLevelBuilder.class
 com\polymarket\marketmaker\model\Order$OrderBuilder.class
 com\polymarket\marketmaker\model\Order.class
+com\polymarket\marketmaker\service\MarketSwitchListener.class

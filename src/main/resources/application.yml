@@ -23,6 +23,8 @@ polymarket:
     passphrase: ${POLY_API_PASSPHRASE:}
     fee-rate-bps: ${POLY_FEE_RATE_BPS:0}
 
+  market-id: ${MARKET_ID:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef}
+
   ws:
     url: ${POLYMARKET_WS_URL:wss://ws-subscriptions-clob.polymarket.com/ws/market}
     initial-backoff-ms: ${WS_INITIAL_BACKOFF_MS:1000}
@@ -39,6 +41,11 @@ polymarket:
     target-spread-cents: ${TARGET_SPREAD_CENTS:0.02}
     order-size: ${ORDER_SIZE:100}
     paper-trading-enabled: ${PAPER_TRADING:true}
+
+  discovery:
+    url: ${DISCOVERY_URL:https://gamma-api.polymarket.com/events}
+    event-title-filter: ${EVENT_TITLE:Bitcoin Up or Down - 15 Minutes}
+    poll-interval-ms: ${DISCOVERY_POLL_MS:300000}
 
 # -----------------------------------------------------------
 # Logging — keep it lean for low-latency

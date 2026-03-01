@@ -79,12 +79,10 @@ class StrategyEngineTest {
     void testPaperTradeLogsInsteadOfPlacing() {
         orderBook.updateLevel(OrderBook.Side.BID, new BigDecimal("0.50"), new BigDecimal("100"));
         orderBook.updateLevel(OrderBook.Side.ASK, new BigDecimal("0.55"), new BigDecimal("100"));
-        // spread = 0.05 >= target 0.02 → triggers
 
         StrategyEngine engine = buildEngine(true, "0.02", "100");
         engine.evaluateAndQuote();
 
-        // Paper trading → OMS must NEVER be called
         verify(mockOms, never()).placeOrder(any());
     }
 
@@ -103,7 +101,6 @@ class StrategyEngineTest {
         StrategyEngine engine = buildEngine(false, "0.02", "100");
         engine.evaluateAndQuote();
 
-        // Live mode → exactly 2 placeOrder calls (BUY + SELL)
         verify(mockOms, times(2)).placeOrder(any(Order.class));
     }
 
@@ -122,7 +119,6 @@ class StrategyEngineTest {
         StrategyEngine engine = buildEngine(false, "0.02", "50");
         engine.evaluateAndQuote();
 
-        // Capture the two orders placed
         var captor = org.mockito.ArgumentCaptor.forClass(Order.class);
         verify(mockOms, times(2)).placeOrder(captor.capture());
 
@@ -130,11 +126,11 @@ class StrategyEngineTest {
         Order sellOrder = captor.getAllValues().get(1);
 
         assertEquals(Order.Side.BUY, buyOrder.getSide());
-        assertEquals(new BigDecimal("0.51"), buyOrder.getPrice()); // bestBid(0.50) + 0.01
+        assertEquals(new BigDecimal("0.51"), buyOrder.getPrice());
         assertEquals(new BigDecimal("50"), buyOrder.getSize());
 
         assertEquals(Order.Side.SELL, sellOrder.getSide());
-        assertEquals(new BigDecimal("0.54"), sellOrder.getPrice()); // bestAsk(0.55) − 0.01
+        assertEquals(new BigDecimal("0.54"), sellOrder.getPrice());
         assertEquals(new BigDecimal("50"), sellOrder.getSize());
     }
 
@@ -147,7 +143,6 @@ class StrategyEngineTest {
     void testSpreadExactlyAtTarget() {
         orderBook.updateLevel(OrderBook.Side.BID, new BigDecimal("0.50"), new BigDecimal("100"));
         orderBook.updateLevel(OrderBook.Side.ASK, new BigDecimal("0.52"), new BigDecimal("100"));
-        // spread = 0.02 == target 0.02 → should trigger
 
         when(mockOms.placeOrder(any())).thenReturn("{\"success\":true}");
 
@@ -155,6 +150,49 @@ class StrategyEngineTest {
         engine.evaluateAndQuote();
 
         verify(mockOms, times(2)).placeOrder(any(Order.class));
+    }
+
+    // -----------------------------------------------------------------
+    // Pause guard (Sprint 5)
+    // -----------------------------------------------------------------
+
+    @Test
+    @DisplayName("evaluateAndQuote returns immediately when paused")
+    void testSkipsWhenPaused() {
+        orderBook.updateLevel(OrderBook.Side.BID, new BigDecimal("0.50"), new BigDecimal("100"));
+        orderBook.updateLevel(OrderBook.Side.ASK, new BigDecimal("0.55"), new BigDecimal("100"));
+
+        when(mockOms.placeOrder(any())).thenReturn("{\"success\":true}");
+
+        StrategyEngine engine = buildEngine(false, "0.02", "100");
+        engine.setPaused(true);
+        engine.evaluateAndQuote();
+
+        // Paused → no orders placed even though spread is wide
+        verify(mockOms, never()).placeOrder(any());
+    }
+
+    // -----------------------------------------------------------------
+    // Market switch (Sprint 5)
+    // -----------------------------------------------------------------
+
+    @Test
+    @DisplayName("onMarketSwitch updates marketId, clears book, and unpauses")
+    void testOnMarketSwitchUpdatesState() {
+        orderBook.updateLevel(OrderBook.Side.BID, new BigDecimal("0.50"), new BigDecimal("100"));
+        orderBook.updateLevel(OrderBook.Side.ASK, new BigDecimal("0.55"), new BigDecimal("100"));
+
+        StrategyEngine engine = buildEngine(true, "0.02", "100");
+        assertEquals("test-market-id", engine.getMarketId());
+        assertEquals(1, orderBook.getBidDepth());
+
+        // Simulate market switch
+        engine.onMarketSwitch("new-token-xyz");
+
+        assertEquals("new-token-xyz", engine.getMarketId());
+        assertFalse(engine.isPaused());
+        assertEquals(0, orderBook.getBidDepth()); // book cleared
+        assertEquals(0, orderBook.getAskDepth()); // book cleared
     }
 
     // -----------------------------------------------------------------
@@ -166,6 +204,7 @@ class StrategyEngineTest {
         return new StrategyEngine(
                 orderBook,
                 mockOms,
+                "test-market-id",
                 new BigDecimal(targetSpread),
                 new BigDecimal(orderSize),
                 paperTrading);
