@@ -1,5 +1,7 @@
 package com.polymarket.marketmaker.service;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,149 +22,164 @@ import static org.mockito.Mockito.*;
  *
  * <p>
  * Mocks the {@link RestTemplate} to return canned Gamma API responses
- * and verifies parsing, filtering, and listener notification logic.
+ * and verifies parsing, endDate filtering, and listener notification.
  * </p>
  */
 class MarketDiscoveryServiceTest {
 
-    private RestTemplate mockRestTemplate;
-    private List<MarketSwitchListener> listeners;
-    private AtomicReference<String> notifiedTokenId;
+        private RestTemplate mockRestTemplate;
+        private List<MarketSwitchListener> listeners;
+        private AtomicReference<String> notifiedTokenId;
 
-    @BeforeEach
-    void setUp() {
-        mockRestTemplate = Mockito.mock(RestTemplate.class);
-        listeners = new ArrayList<>();
-        notifiedTokenId = new AtomicReference<>(null);
+        /** A time 1 hour in the future — used for active market endDates. */
+        private String futureEndDate;
 
-        // Simple listener that records the notified token ID
-        listeners.add(newTokenId -> notifiedTokenId.set(newTokenId));
-    }
+        /** A time 1 hour in the past — used for expired market endDates. */
+        private String pastEndDate;
 
-    // -----------------------------------------------------------------
-    // Matching event found
-    // -----------------------------------------------------------------
+        @BeforeEach
+        void setUp() {
+                mockRestTemplate = Mockito.mock(RestTemplate.class);
+                listeners = new ArrayList<>();
+                notifiedTokenId = new AtomicReference<>(null);
 
-    @Test
-    @DisplayName("Finds matching event and notifies listeners")
-    void testMatchingEventNotifiesListeners() {
-        String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
-                "[\"token-yes-123\", \"token-no-456\"]", false, true);
+                futureEndDate = Instant.now().plus(1, ChronoUnit.HOURS).toString();
+                pastEndDate = Instant.now().minus(1, ChronoUnit.HOURS).toString();
 
-        when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
-                .thenReturn(json);
+                listeners.add(newTokenId -> notifiedTokenId.set(newTokenId));
+        }
 
-        MarketDiscoveryService service = buildService();
-        service.pollForActiveMarket();
+        // -----------------------------------------------------------------
+        // Active market found (endDate in future)
+        // -----------------------------------------------------------------
 
-        assertEquals("token-yes-123", notifiedTokenId.get());
-        assertEquals("token-yes-123", service.getCurrentTokenId());
-    }
+        @Test
+        @DisplayName("Finds active market with future endDate and notifies listeners")
+        void testActiveMarketNotifiesListeners() {
+                String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
+                                "[\"token-yes-123\", \"token-no-456\"]",
+                                false, true, futureEndDate, futureEndDate);
 
-    // -----------------------------------------------------------------
-    // No matching event
-    // -----------------------------------------------------------------
+                when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
+                                .thenReturn(json);
 
-    @Test
-    @DisplayName("No matching event → listeners NOT notified")
-    void testNoMatchingEventDoesNotNotify() {
-        String json = buildGammaResponse("Some Other Event",
-                "[\"token-111\", \"token-222\"]", false, true);
+                MarketDiscoveryService service = buildService();
+                service.pollForActiveMarket();
 
-        when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
-                .thenReturn(json);
+                assertEquals("token-yes-123", notifiedTokenId.get());
+                assertEquals("token-yes-123", service.getCurrentTokenId());
+        }
 
-        MarketDiscoveryService service = buildService();
-        service.pollForActiveMarket();
+        // -----------------------------------------------------------------
+        // Expired market (endDate in past) → skipped
+        // -----------------------------------------------------------------
 
-        assertNull(notifiedTokenId.get());
-        assertNull(service.getCurrentTokenId());
-    }
+        @Test
+        @DisplayName("Expired market (past endDate) → listeners NOT notified")
+        void testExpiredMarketIsSkipped() {
+                String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
+                                "[\"token-expired\", \"token-no\"]",
+                                false, true, pastEndDate, pastEndDate);
 
-    // -----------------------------------------------------------------
-    // Same token ID → no redundant switch
-    // -----------------------------------------------------------------
+                when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
+                                .thenReturn(json);
 
-    @Test
-    @DisplayName("Same token ID as before → no redundant switch")
-    void testSameTokenIdDoesNotSwitch() {
-        String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
-                "[\"token-yes-123\", \"token-no-456\"]", false, true);
+                MarketDiscoveryService service = buildService();
+                service.pollForActiveMarket();
 
-        when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
-                .thenReturn(json);
+                assertNull(notifiedTokenId.get());
+                assertNull(service.getCurrentTokenId());
+        }
 
-        // Count notifications
-        List<String> notifications = new ArrayList<>();
-        listeners.clear();
-        listeners.add(notifications::add);
+        // -----------------------------------------------------------------
+        // Same token ID → no redundant switch
+        // -----------------------------------------------------------------
 
-        MarketDiscoveryService service = buildService();
+        @Test
+        @DisplayName("Same token ID as before → no redundant switch")
+        void testSameTokenIdDoesNotSwitch() {
+                String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
+                                "[\"token-yes-123\", \"token-no-456\"]",
+                                false, true, futureEndDate, futureEndDate);
 
-        // First poll → should notify
-        service.pollForActiveMarket();
-        assertEquals(1, notifications.size());
+                when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
+                                .thenReturn(json);
 
-        // Second poll with same token → should NOT notify again
-        service.pollForActiveMarket();
-        assertEquals(1, notifications.size()); // still 1
-    }
+                List<String> notifications = new ArrayList<>();
+                listeners.clear();
+                listeners.add(notifications::add);
 
-    // -----------------------------------------------------------------
-    // Skip closed markets
-    // -----------------------------------------------------------------
+                MarketDiscoveryService service = buildService();
 
-    @Test
-    @DisplayName("Closed market is skipped even if title matches")
-    void testClosedMarketIsSkipped() {
-        String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
-                "[\"token-closed\", \"token-no\"]", true, true);
+                service.pollForActiveMarket();
+                assertEquals(1, notifications.size());
 
-        when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
-                .thenReturn(json);
+                service.pollForActiveMarket();
+                assertEquals(1, notifications.size()); // still 1
+        }
 
-        MarketDiscoveryService service = buildService();
-        service.pollForActiveMarket();
+        // -----------------------------------------------------------------
+        // Closed market → skipped
+        // -----------------------------------------------------------------
 
-        assertNull(notifiedTokenId.get());
-    }
+        @Test
+        @DisplayName("Closed market is skipped")
+        void testClosedMarketIsSkipped() {
+                String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
+                                "[\"token-closed\", \"token-no\"]",
+                                true, true, futureEndDate, futureEndDate);
 
-    // -----------------------------------------------------------------
-    // parseTokenId directly
-    // -----------------------------------------------------------------
+                when(mockRestTemplate.getForObject(anyString(), eq(String.class)))
+                                .thenReturn(json);
 
-    @Test
-    @DisplayName("parseTokenId extracts first token from clobTokenIds string")
-    void testParseTokenIdExtractsCorrectly() {
-        String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
-                "[\"98765432109876543210\", \"12345678901234567890\"]", false, true);
+                MarketDiscoveryService service = buildService();
+                service.pollForActiveMarket();
 
-        MarketDiscoveryService service = buildService();
-        String tokenId = service.parseTokenId(json);
+                assertNull(notifiedTokenId.get());
+        }
 
-        assertEquals("98765432109876543210", tokenId);
-    }
+        // -----------------------------------------------------------------
+        // parseTokenId directly
+        // -----------------------------------------------------------------
 
-    // -----------------------------------------------------------------
-    // Helpers
-    // -----------------------------------------------------------------
+        @Test
+        @DisplayName("parseTokenId extracts first token from clobTokenIds")
+        void testParseTokenIdExtractsCorrectly() {
+                String json = buildGammaResponse("Bitcoin Up or Down - 15 Minutes",
+                                "[\"98765432109876543210\", \"12345678901234567890\"]",
+                                false, true, futureEndDate, futureEndDate);
 
-    private MarketDiscoveryService buildService() {
-        return new MarketDiscoveryService(
-                "https://gamma-api.polymarket.com/events",
-                "Bitcoin Up or Down - 15 Minutes",
-                listeners,
-                mockRestTemplate);
-    }
+                MarketDiscoveryService service = buildService();
+                String tokenId = service.parseTokenId(json);
 
-    /**
-     * Builds a minimal Gamma API–shaped JSON response.
-     */
-    private String buildGammaResponse(String title, String clobTokenIds,
-            boolean closed, boolean active) {
-        return String.format(
-                "[{\"title\":\"%s\",\"markets\":[{\"conditionId\":\"0xabc\","
-                        + "\"clobTokenIds\":\"%s\",\"closed\":%s,\"active\":%s}]}]",
-                title, clobTokenIds.replace("\"", "\\\""), closed, active);
-    }
+                assertEquals("98765432109876543210", tokenId);
+        }
+
+        // -----------------------------------------------------------------
+        // Helpers
+        // -----------------------------------------------------------------
+
+        private MarketDiscoveryService buildService() {
+                return new MarketDiscoveryService(
+                                "https://gamma-api.polymarket.com/events",
+                                "10192",
+                                listeners,
+                                mockRestTemplate);
+        }
+
+        /**
+         * Builds a Gamma API–shaped JSON response with endDate and startDate.
+         */
+        private String buildGammaResponse(String title, String clobTokenIds,
+                        boolean closed, boolean active,
+                        String endDate, String startDate) {
+                return String.format(
+                                "[{\"title\":\"%s\",\"endDate\":\"%s\",\"startDate\":\"%s\","
+                                                + "\"markets\":[{\"conditionId\":\"0xabc\","
+                                                + "\"clobTokenIds\":\"%s\",\"closed\":%s,\"active\":%s,"
+                                                + "\"endDate\":\"%s\",\"startDate\":\"%s\"}]}]",
+                                title, endDate, startDate,
+                                clobTokenIds.replace("\"", "\\\""),
+                                closed, active, endDate, startDate);
+        }
 }

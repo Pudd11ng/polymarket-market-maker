@@ -140,6 +140,12 @@ public class StrategyEngine implements MarketSwitchListener {
             return;
         }
 
+        // 0b. No market discovered yet — stay idle
+        if (marketId == null || marketId.isBlank()) {
+            log.trace("⏸ No marketId discovered yet — skipping tick");
+            return;
+        }
+
         // 1. Lock-free read of both sides
         Optional<Map.Entry<BigDecimal, BigDecimal>> bestBidOpt = orderBook.getBestBid();
         Optional<Map.Entry<BigDecimal, BigDecimal>> bestAskOpt = orderBook.getBestAsk();

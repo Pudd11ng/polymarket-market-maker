@@ -44,7 +44,7 @@ polymarket:
 
   discovery:
     url: ${DISCOVERY_URL:https://gamma-api.polymarket.com/events}
-    event-title-filter: ${EVENT_TITLE:Bitcoin Up or Down - 15 Minutes}
+    series-id: ${SERIES_ID:10192}
     poll-interval-ms: ${DISCOVERY_POLL_MS:300000}
 
 # -----------------------------------------------------------

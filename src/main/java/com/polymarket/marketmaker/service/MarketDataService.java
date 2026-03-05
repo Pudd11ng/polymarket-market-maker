@@ -154,10 +154,13 @@ public class MarketDataService implements MarketSwitchListener {
      */
     public void subscribeToMarket(String assetId) {
         if (wsClient != null && wsClient.isOpen()) {
+            // CRITICAL: key must be "assets_ids" (plural) with value as a JSON array of
+            // strings
             String subscriptionMsg = String.format(
-                    "{\"type\":\"market\",\"assets_id\":\"%s\"}", assetId);
+                    "{\"type\":\"subscribe\",\"assets_ids\":[\"%s\"]}", assetId);
+            log.debug("📡 Sending WS subscription: {}", subscriptionMsg);
             wsClient.send(subscriptionMsg);
-            log.info("📡 Subscribed to market asset_id={}", assetId);
+            log.info("📡 Subscribed to market assets_ids=[{}]", assetId);
         } else {
             log.warn("Cannot subscribe — WebSocket is not open");
         }
@@ -232,6 +235,12 @@ public class MarketDataService implements MarketSwitchListener {
 
         @Override
         public void onMessage(String message) {
+            // Guard: skip non-JSON error responses from Polymarket
+            if (message == null || message.startsWith("INVALID") || !message.trim().startsWith("{")) {
+                log.error("🛑 Received non-JSON error from Polymarket: {}", message);
+                return;
+            }
+
             try {
                 parseAndUpdateOrderBook(message);
             } catch (Exception e) {

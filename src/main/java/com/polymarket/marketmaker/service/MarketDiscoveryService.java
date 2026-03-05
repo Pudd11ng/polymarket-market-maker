@@ -1,5 +1,6 @@
 package com.polymarket.marketmaker.service;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,19 +17,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Polls the Polymarket Gamma API to discover the currently active
- * "Bitcoin Up or Down - 15 Minutes" market and extracts its CLOB token ID.
+ * Bitcoin 15-minute market using series-based pre-filtering.
+ *
+ * <p>
+ * Uses {@code series_id} (default {@code 10192}) so the API returns
+ * only Bitcoin 15-minute "Up or Down" events. The service picks the
+ * market with the latest {@code startDate} whose {@code endDate} is
+ * still in the future — i.e., the current 15-minute window.
+ * </p>
  *
  * <p>
  * When a new token ID is detected, the service orchestrates the safe
  * <b>Pause → Clear → Switch → Resume</b> protocol by notifying all
  * registered {@link MarketSwitchListener}s.
- * </p>
- *
- * <h3>Polling</h3>
- * <p>
- * Runs every 5 minutes by default
- * ({@code polymarket.discovery.poll-interval-ms}).
- * Also runs once at startup via {@code initialDelay = 0}.
  * </p>
  */
 @Service
@@ -37,7 +38,7 @@ public class MarketDiscoveryService {
     private static final Logger log = LoggerFactory.getLogger(MarketDiscoveryService.class);
 
     private final String discoveryUrl;
-    private final String eventTitleFilter;
+    private final String seriesId;
     private final List<MarketSwitchListener> listeners;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -48,23 +49,23 @@ public class MarketDiscoveryService {
     @Autowired
     public MarketDiscoveryService(
             @Value("${polymarket.discovery.url:https://gamma-api.polymarket.com/events}") String discoveryUrl,
-            @Value("${polymarket.discovery.event-title-filter:Bitcoin Up or Down - 15 Minutes}") String eventTitleFilter,
+            @Value("${polymarket.discovery.series-id:10192}") String seriesId,
             List<MarketSwitchListener> listeners) {
         this.discoveryUrl = discoveryUrl;
-        this.eventTitleFilter = eventTitleFilter;
+        this.seriesId = seriesId;
         this.listeners = listeners;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
 
-        log.info("🔍 MarketDiscoveryService initialized — url={}, filter=\"{}\"",
-                discoveryUrl, eventTitleFilter);
+        log.info("🔍 MarketDiscoveryService initialized — url={}, seriesId={}",
+                discoveryUrl, seriesId);
     }
 
     // Visible for testing
-    MarketDiscoveryService(String discoveryUrl, String eventTitleFilter,
+    MarketDiscoveryService(String discoveryUrl, String seriesId,
             List<MarketSwitchListener> listeners, RestTemplate restTemplate) {
         this.discoveryUrl = discoveryUrl;
-        this.eventTitleFilter = eventTitleFilter;
+        this.seriesId = seriesId;
         this.listeners = listeners;
         this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
@@ -77,7 +78,8 @@ public class MarketDiscoveryService {
     @Scheduled(fixedRateString = "${polymarket.discovery.poll-interval-ms:300000}", initialDelay = 0)
     public void pollForActiveMarket() {
         try {
-            String fullUrl = discoveryUrl + "?active=true&closed=false&limit=50";
+            String fullUrl = discoveryUrl + "?active=true&closed=false&series_id=" + seriesId;
+            log.debug("🔍 Polling: {}", fullUrl);
             String response = restTemplate.getForObject(fullUrl, String.class);
 
             if (response == null || response.isBlank()) {
@@ -88,7 +90,7 @@ public class MarketDiscoveryService {
             String tokenId = parseTokenId(response);
 
             if (tokenId == null) {
-                log.debug("🔍 No matching event found for filter \"{}\"", eventTitleFilter);
+                log.warn("🔍 No active Bitcoin 15m markets found via series_id={}.", seriesId);
                 return;
             }
 
@@ -110,12 +112,20 @@ public class MarketDiscoveryService {
     }
 
     // -----------------------------------------------------------------
-    // JSON parsing
+    // JSON parsing — endDate / startDate aware
     // -----------------------------------------------------------------
 
     /**
-     * Parses the Gamma API events JSON and extracts the first matching
-     * CLOB token ID for the configured event title filter.
+     * Parses the Gamma API events JSON and extracts the CLOB token ID
+     * for the <b>current</b> 15-minute window.
+     *
+     * <p>
+     * Strategy: iterate all events, filter markets where
+     * {@code endDate} is in the future, then pick the one with the
+     * latest {@code startDate} (i.e. the current window). Uses a
+     * secondary {@code readTree()} to parse the JSON-encoded
+     * {@code clobTokenIds} string.
+     * </p>
      *
      * @param json raw JSON response string
      * @return the "Yes" outcome token ID, or null if no match
@@ -123,43 +133,96 @@ public class MarketDiscoveryService {
     String parseTokenId(String json) {
         try {
             JsonNode events = objectMapper.readTree(json);
+            Instant now = Instant.now();
+
+            String bestTokenId = null;
+            String bestTitle = null;
+            Instant bestStartDate = Instant.MIN;
 
             for (JsonNode event : events) {
                 String title = event.path("title").asText("");
-
-                if (!title.contains(eventTitleFilter)) {
-                    continue;
-                }
 
                 JsonNode markets = event.path("markets");
                 for (JsonNode market : markets) {
                     // Skip closed markets
                     if (market.path("closed").asBoolean(false)) {
+                        log.debug("🔍 Skipping closed market: \"{}\"", title);
                         continue;
                     }
                     if (!market.path("active").asBoolean(false)) {
+                        log.debug("🔍 Skipping inactive market: \"{}\"", title);
                         continue;
                     }
 
-                    // clobTokenIds is a JSON-encoded string: ["<yes>", "<no>"]
+                    // --- endDate filter: must be in the future ---
+                    String endDateStr = market.path("endDate").asText(
+                            event.path("endDate").asText(""));
+                    if (!endDateStr.isEmpty()) {
+                        Instant endDate = parseInstant(endDateStr);
+                        if (endDate != null && endDate.isBefore(now)) {
+                            log.debug("🔍 Skipping expired market (endDate={}): \"{}\"",
+                                    endDateStr, title);
+                            continue;
+                        }
+                    }
+
+                    // --- startDate: prefer the latest (most current window) ---
+                    String startDateStr = market.path("startDate").asText(
+                            event.path("startDate").asText(""));
+                    Instant startDate = parseInstant(startDateStr);
+                    if (startDate == null) {
+                        startDate = Instant.MIN;
+                    }
+
+                    // --- Extract clobTokenIds ---
                     String clobTokenIdsStr = market.path("clobTokenIds").asText("");
                     if (clobTokenIdsStr.isEmpty()) {
+                        log.warn("🔍 Empty clobTokenIds: \"{}\"", title);
                         continue;
                     }
 
                     JsonNode tokenIds = objectMapper.readTree(clobTokenIdsStr);
-                    if (tokenIds.isArray() && tokenIds.size() > 0) {
-                        String tokenId = tokenIds.get(0).asText();
-                        log.info("🔍 Found active market: title=\"{}\", tokenId={}",
-                                title, tokenId);
-                        return tokenId;
+                    if (!tokenIds.isArray() || tokenIds.size() == 0) {
+                        log.warn("🔍 Invalid clobTokenIds array: \"{}\"", title);
+                        continue;
+                    }
+
+                    String tokenId = tokenIds.get(0).asText();
+
+                    // Keep track of the market with the latest startDate
+                    if (startDate.isAfter(bestStartDate)) {
+                        bestStartDate = startDate;
+                        bestTokenId = tokenId;
+                        bestTitle = title;
                     }
                 }
             }
+
+            if (bestTokenId != null) {
+                log.info("🎯 Found active market in Series {}: {} | Token ID: {}",
+                        seriesId, bestTitle, bestTokenId);
+            }
+            return bestTokenId;
+
         } catch (Exception e) {
             log.error("🔍 Failed to parse Gamma API response", e);
         }
         return null;
+    }
+
+    /**
+     * Safely parses an ISO-8601 instant string. Returns null on failure.
+     */
+    private Instant parseInstant(String dateStr) {
+        if (dateStr == null || dateStr.isEmpty()) {
+            return null;
+        }
+        try {
+            return Instant.parse(dateStr);
+        } catch (Exception e) {
+            log.trace("Could not parse date: {}", dateStr);
+            return null;
+        }
     }
 
     // -----------------------------------------------------------------
