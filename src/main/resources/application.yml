@@ -45,7 +45,7 @@ polymarket:
   discovery:
     url: ${DISCOVERY_URL:https://gamma-api.polymarket.com/events}
     series-id: ${SERIES_ID:10192}
-    poll-interval-ms: ${DISCOVERY_POLL_MS:300000}
+    poll-interval-ms: ${DISCOVERY_POLL_MS:60000}
 
 # -----------------------------------------------------------
 # Logging — keep it lean for low-latency

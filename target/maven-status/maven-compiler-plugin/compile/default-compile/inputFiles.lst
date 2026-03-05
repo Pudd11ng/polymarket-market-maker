@@ -3,10 +3,16 @@ C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\ApiRequest.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\Order.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\OrderBook.java
+C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\risk\PositionRisk.java
+C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\risk\RiskLevel.java
+C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\risk\RiskLimits.java
+C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\risk\RiskSummary.java
+C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\model\risk\ValidationResult.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\PolymarketMarketMakerApplication.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\service\MarketDataService.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\service\MarketDiscoveryService.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\service\MarketSwitchListener.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\service\OrderManagementService.java
+C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\service\RiskEngine.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\service\StrategyEngine.java
 C:\Users\User\.gemini\antigravity\scratch\polymarket-market-maker\src\main\java\com\polymarket\marketmaker\util\CryptoSigningUtil.java

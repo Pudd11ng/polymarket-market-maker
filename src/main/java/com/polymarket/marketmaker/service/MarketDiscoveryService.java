@@ -1,6 +1,9 @@
 package com.polymarket.marketmaker.service;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,9 +78,13 @@ public class MarketDiscoveryService {
     // Scheduled polling — every 5 minutes
     // -----------------------------------------------------------------
 
-    @Scheduled(fixedRateString = "${polymarket.discovery.poll-interval-ms:300000}", initialDelay = 0)
+    @Scheduled(fixedRateString = "${polymarket.discovery.poll-interval-ms:60000}", initialDelay = 0)
     public void pollForActiveMarket() {
         try {
+            // Log current ET time for timezone clarity
+            ZonedDateTime nowET = ZonedDateTime.now(ZoneId.of("America/New_York"));
+            log.info("🕒 Current Time in New York (ET): {}", nowET.format(DateTimeFormatter.ofPattern("HH:mm:ss z")));
+
             String fullUrl = discoveryUrl + "?active=true&closed=false&series_id=" + seriesId;
             log.debug("🔍 Polling: {}", fullUrl);
             String response = restTemplate.getForObject(fullUrl, String.class);
@@ -86,6 +93,8 @@ public class MarketDiscoveryService {
                 log.warn("🔍 Gamma API returned empty response");
                 return;
             }
+
+            log.info("📡 Raw Gamma API Data: {}", response);
 
             String tokenId = parseTokenId(response);
 
@@ -120,12 +129,15 @@ public class MarketDiscoveryService {
      * for the <b>current</b> 15-minute window.
      *
      * <p>
-     * Strategy: iterate all events, filter markets where
-     * {@code endDate} is in the future, then pick the one with the
-     * latest {@code startDate} (i.e. the current window). Uses a
-     * secondary {@code readTree()} to parse the JSON-encoded
-     * {@code clobTokenIds} string.
+     * <b>Strategy:</b>
      * </p>
+     * <ol>
+     * <li><b>Live window</b>: Find a market where startDate &le; now AND endDate
+     * &gt; now.
+     * If found, return immediately.</li>
+     * <li><b>Fallback</b>: If no live window exists (gap between windows), pick the
+     * market with the earliest future startDate (the next upcoming window).</li>
+     * </ol>
      *
      * @param json raw JSON response string
      * @return the "Yes" outcome token ID, or null if no match
@@ -135,77 +147,92 @@ public class MarketDiscoveryService {
             JsonNode events = objectMapper.readTree(json);
             Instant now = Instant.now();
 
-            String bestTokenId = null;
-            String bestTitle = null;
-            Instant bestStartDate = Instant.MIN;
+            // Fallback: soonest future market
+            String fallbackTokenId = null;
+            String fallbackTitle = null;
+            Instant fallbackStartDate = Instant.MAX;
 
             for (JsonNode event : events) {
                 String title = event.path("title").asText("");
 
                 JsonNode markets = event.path("markets");
                 for (JsonNode market : markets) {
-                    // Skip closed markets
+                    // Skip closed / inactive
                     if (market.path("closed").asBoolean(false)) {
-                        log.debug("🔍 Skipping closed market: \"{}\"", title);
                         continue;
                     }
                     if (!market.path("active").asBoolean(false)) {
-                        log.debug("🔍 Skipping inactive market: \"{}\"", title);
                         continue;
                     }
 
-                    // --- endDate filter: must be in the future ---
+                    // Parse dates
                     String endDateStr = market.path("endDate").asText(
                             event.path("endDate").asText(""));
-                    if (!endDateStr.isEmpty()) {
-                        Instant endDate = parseInstant(endDateStr);
-                        if (endDate != null && endDate.isBefore(now)) {
-                            log.debug("🔍 Skipping expired market (endDate={}): \"{}\"",
-                                    endDateStr, title);
-                            continue;
-                        }
+                    Instant endDate = parseInstant(endDateStr);
+                    if (endDate == null || endDate.isBefore(now)) {
+                        log.debug("🔍 Skipping expired (endDate={}): \"{}\"", endDateStr, title);
+                        continue;
                     }
 
-                    // --- startDate: prefer the latest (most current window) ---
                     String startDateStr = market.path("startDate").asText(
                             event.path("startDate").asText(""));
                     Instant startDate = parseInstant(startDateStr);
-                    if (startDate == null) {
-                        startDate = Instant.MIN;
-                    }
 
-                    // --- Extract clobTokenIds ---
-                    String clobTokenIdsStr = market.path("clobTokenIds").asText("");
-                    if (clobTokenIdsStr.isEmpty()) {
-                        log.warn("🔍 Empty clobTokenIds: \"{}\"", title);
+                    // Extract token ID
+                    String tokenId = extractFirstTokenId(market, title);
+                    if (tokenId == null)
                         continue;
+
+                    // --- PRIORITY 1: Live window (startDate <= now AND endDate > now) ---
+                    if (startDate != null && !startDate.isAfter(now)) {
+                        log.info("🎯 LIVE 15m window in Series {}: {} | Token ID: {}",
+                                seriesId, title, tokenId);
+                        return tokenId; // Immediately return — this is THE market
                     }
 
-                    JsonNode tokenIds = objectMapper.readTree(clobTokenIdsStr);
-                    if (!tokenIds.isArray() || tokenIds.size() == 0) {
-                        log.warn("🔍 Invalid clobTokenIds array: \"{}\"", title);
-                        continue;
-                    }
-
-                    String tokenId = tokenIds.get(0).asText();
-
-                    // Keep track of the market with the latest startDate
-                    if (startDate.isAfter(bestStartDate)) {
-                        bestStartDate = startDate;
-                        bestTokenId = tokenId;
-                        bestTitle = title;
+                    // --- PRIORITY 2: Track soonest future market as fallback ---
+                    if (startDate != null && startDate.isBefore(fallbackStartDate)) {
+                        fallbackStartDate = startDate;
+                        fallbackTokenId = tokenId;
+                        fallbackTitle = title;
                     }
                 }
             }
 
-            if (bestTokenId != null) {
-                log.info("🎯 Found active market in Series {}: {} | Token ID: {}",
-                        seriesId, bestTitle, bestTokenId);
+            // No live window — use fallback if available
+            if (fallbackTokenId != null) {
+                log.info("⏳ No live window — using next upcoming market in Series {}: {} (starts {}) | Token ID: {}",
+                        seriesId, fallbackTitle, fallbackStartDate, fallbackTokenId);
+                return fallbackTokenId;
             }
-            return bestTokenId;
+
+            log.info("🔍 No live or upcoming markets found in Series {}", seriesId);
+            return null;
 
         } catch (Exception e) {
             log.error("🔍 Failed to parse Gamma API response", e);
+        }
+        return null;
+    }
+
+    /**
+     * Extracts the first token ID from a market's clobTokenIds field.
+     * Returns null if the field is missing or empty.
+     */
+    private String extractFirstTokenId(JsonNode market, String title) {
+        try {
+            String clobTokenIdsStr = market.path("clobTokenIds").asText("");
+            if (clobTokenIdsStr.isEmpty()) {
+                log.warn("🔍 Empty clobTokenIds: \"{}\"", title);
+                return null;
+            }
+            JsonNode tokenIds = objectMapper.readTree(clobTokenIdsStr);
+            if (tokenIds.isArray() && tokenIds.size() > 0) {
+                return tokenIds.get(0).asText();
+            }
+            log.warn("🔍 Invalid clobTokenIds array: \"{}\"", title);
+        } catch (Exception e) {
+            log.warn("🔍 Failed to parse clobTokenIds for: \"{}\"", title);
         }
         return null;
     }

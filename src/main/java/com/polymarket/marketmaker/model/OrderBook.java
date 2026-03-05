@@ -39,7 +39,7 @@ import lombok.NoArgsConstructor;
 public class OrderBook {
 
     /** Polymarket condition / token identifier. */
-    private final String tokenId;
+    private volatile String tokenId;
 
     /**
      * Bid side — highest price first (descending).
@@ -64,6 +64,19 @@ public class OrderBook {
         this.tokenId = tokenId;
         this.bids = new ConcurrentSkipListMap<>(Comparator.reverseOrder());
         this.asks = new ConcurrentSkipListMap<>(); // natural ascending order
+    }
+
+    // -----------------------------------------------------------------
+    // Token ID management
+    // -----------------------------------------------------------------
+
+    /**
+     * Updates the token ID label (e.g. during a market switch).
+     *
+     * @param tokenId the new Polymarket condition / token identifier
+     */
+    public void setTokenId(String tokenId) {
+        this.tokenId = tokenId;
     }
 
     // -----------------------------------------------------------------

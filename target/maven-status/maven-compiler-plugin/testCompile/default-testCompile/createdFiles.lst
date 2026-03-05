@@ -1,4 +1,5 @@
 com\polymarket\marketmaker\model\OrderBookTest.class
+com\polymarket\marketmaker\service\RiskEngineTest.class
 com\polymarket\marketmaker\service\StrategyEngineTest.class
 com\polymarket\marketmaker\service\MarketDiscoveryServiceTest.class
 com\polymarket\marketmaker\util\CryptoSigningUtilTest.class

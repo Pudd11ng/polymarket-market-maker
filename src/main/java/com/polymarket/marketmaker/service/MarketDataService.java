@@ -136,13 +136,16 @@ public class MarketDataService implements MarketSwitchListener {
     public void switchMarket(String newTokenId) {
         log.info("🔄 Switching subscription: {} → {}", this.marketId, newTokenId);
 
-        // 1. Clear stale data
+        // 1. Update order book label
+        orderBook.setTokenId(newTokenId);
+
+        // 2. Clear stale data
         orderBook.clear();
 
-        // 2. Update internal state
+        // 3. Update internal state
         this.marketId = newTokenId;
 
-        // 3. Subscribe to new market
+        // 4. Subscribe to new market
         subscribeToMarket(newTokenId);
     }
 
@@ -154,13 +157,12 @@ public class MarketDataService implements MarketSwitchListener {
      */
     public void subscribeToMarket(String assetId) {
         if (wsClient != null && wsClient.isOpen()) {
-            // CRITICAL: key must be "assets_ids" (plural) with value as a JSON array of
-            // strings
+            // Polymarket CLOB protocol: operation + type + assets_ids (array of strings)
             String subscriptionMsg = String.format(
-                    "{\"type\":\"subscribe\",\"assets_ids\":[\"%s\"]}", assetId);
+                    "{\"operation\":\"subscribe\",\"assets_ids\":[\"%s\"],\"type\":\"market\"}", assetId);
             log.debug("📡 Sending WS subscription: {}", subscriptionMsg);
             wsClient.send(subscriptionMsg);
-            log.info("📡 Subscribed to market assets_ids=[{}]", assetId);
+            log.info("📡 Requested subscription for assets_ids=[{}]", assetId);
         } else {
             log.warn("Cannot subscribe — WebSocket is not open");
         }
@@ -235,9 +237,23 @@ public class MarketDataService implements MarketSwitchListener {
 
         @Override
         public void onMessage(String message) {
-            // Guard: skip non-JSON error responses from Polymarket
-            if (message == null || message.startsWith("INVALID") || !message.trim().startsWith("{")) {
-                log.error("🛑 Received non-JSON error from Polymarket: {}", message);
+            // Guard: null or INVALID error responses
+            if (message == null || message.startsWith("INVALID")) {
+                log.error("🛑 Received error from Polymarket: {}", message);
+                return;
+            }
+
+            String trimmed = message.trim();
+
+            // Handle subscription acknowledgment (empty array)
+            if (trimmed.equals("[]")) {
+                log.debug("✅ Subscription acknowledgment received");
+                return;
+            }
+
+            // Allow JSON objects and non-empty JSON arrays
+            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+                log.error("🛑 Received non-JSON message from Polymarket: {}", message);
                 return;
             }
 
@@ -271,13 +287,13 @@ public class MarketDataService implements MarketSwitchListener {
      * the local order book.
      *
      * <p>
-     * Expected JSON format (array-of-arrays):
+     * Expected JSON format (object-per-level):
      * 
      * <pre>{@code
      * {
      *   "market": "0x123...",
-     *   "bids": [["0.55", "100"], ["0.54", "200"]],
-     *   "asks": [["0.56", "150"], ["0.57", "300"]]
+     *   "bids": [{"price": "0.55", "size": "100"}, ...],
+     *   "asks": [{"price": "0.56", "size": "150"}, ...]
      * }
      * }</pre>
      *
@@ -287,21 +303,21 @@ public class MarketDataService implements MarketSwitchListener {
         JsonNode root = objectMapper.readTree(rawJson);
 
         // --- Bids ---
-        JsonNode bidsNode = root.get("bids");
-        if (bidsNode != null && bidsNode.isArray()) {
+        JsonNode bidsNode = root.path("bids");
+        if (bidsNode.isArray()) {
             for (JsonNode level : bidsNode) {
-                BigDecimal price = new BigDecimal(level.get(0).asText());
-                BigDecimal size = new BigDecimal(level.get(1).asText());
+                BigDecimal price = new BigDecimal(level.path("price").asText());
+                BigDecimal size = new BigDecimal(level.path("size").asText());
                 orderBook.updateLevel(OrderBook.Side.BID, price, size);
             }
         }
 
         // --- Asks ---
-        JsonNode asksNode = root.get("asks");
-        if (asksNode != null && asksNode.isArray()) {
+        JsonNode asksNode = root.path("asks");
+        if (asksNode.isArray()) {
             for (JsonNode level : asksNode) {
-                BigDecimal price = new BigDecimal(level.get(0).asText());
-                BigDecimal size = new BigDecimal(level.get(1).asText());
+                BigDecimal price = new BigDecimal(level.path("price").asText());
+                BigDecimal size = new BigDecimal(level.path("size").asText());
                 orderBook.updateLevel(OrderBook.Side.ASK, price, size);
             }
         }
